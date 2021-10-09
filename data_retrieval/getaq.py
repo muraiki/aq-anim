@@ -17,8 +17,8 @@ Record = Tuple[int, int, str, int, int, float, float, int, float, float, float]
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Fetch PurpleAir API data for a bounded region and output the result to STDOUT as line-delimited '
-                    'JSON.',
+        description='Fetch PurpleAir API data for a bounded region and calculate the EPA IAQI. Outputs the result to '
+                    'STDOUT as line-delimited JSON.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
@@ -75,20 +75,31 @@ def parse_args() -> argparse.Namespace:
 
 
 def parse_record(fields: Tuple[str], record: Record) -> Dict:
+    """
+    Takes a sensor's record from the PurpleAir API, calculates the EPA IAQI for PM 2.5, and returns a dictionary.
+    :param fields: A string tuple of the names to use for the items in the record.
+    :param record: The array returned by the PurpleAir API.
+    :return: A dictionary with keys corresponding to those found in `fields`, plus key epa_iaqi_25.
+    """
     assert len(fields) == len(record)
     stats = {k: v for k, v in zip(fields, record)}
     if stats['pm2.5'] <= 500:
-        stats['epa_iaqi'] = aqi.to_iaqi(aqi.POLLUTANT_PM25, str(stats['pm2.5']), algo=aqi.ALGO_EPA)
-        assert isinstance(stats['epa_iaqi'], Decimal)
-        stats['epa_iaqi'] = int(stats['epa_iaqi'])
+        stats['epa_iaqi_25'] = aqi.to_iaqi(aqi.POLLUTANT_PM25, str(stats['pm2.5']), algo=aqi.ALGO_EPA)
+        assert isinstance(stats['epa_iaqi_25'], Decimal)
+        stats['epa_iaqi_25'] = int(stats['epa_iaqi_25'])
     else:
         # EPA AQI is undefined for pm2.5 > 500.
         # https://www.airnow.gov/aqi/aqi-basics/extremely-high-levels-of-pm25/
-        stats['epi_iaqi'] = None
+        stats['epa_iaqi_25'] = None
     return stats
 
 
 def iso_date(d: float) -> str:
+    """
+    Convert a float timestamp to an ISO 8601 format string in UTC.
+    :param d: A timestamp.
+    :return: A string ISO 8601 UTC datetime.
+    """
     return datetime.fromtimestamp(d, tz=timezone.utc).isoformat()
 
 
