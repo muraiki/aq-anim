@@ -74,9 +74,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_record(fields: Tuple[str], record: Record) -> Dict:
+def parse_sensor_record(fields: Tuple[str], record: Record) -> Dict:
     """
     Takes a sensor's record from the PurpleAir API, calculates the EPA IAQI for PM 2.5, and returns a dictionary.
+    Note that a PM 2.5 > 500 does not have a defined AQI by the EPA. In this case, epa_iaqi_25 will be None.
+    See https://www.airnow.gov/aqi/aqi-basics/extremely-high-levels-of-pm25/
     :param fields: A string tuple of the names to use for the items in the record.
     :param record: The array returned by the PurpleAir API.
     :return: A dictionary with keys corresponding to those found in `fields`, plus key epa_iaqi_25.
@@ -89,7 +91,6 @@ def parse_record(fields: Tuple[str], record: Record) -> Dict:
         stats['epa_iaqi_25'] = int(stats['epa_iaqi_25'])
     else:
         # EPA AQI is undefined for pm2.5 > 500.
-        # https://www.airnow.gov/aqi/aqi-basics/extremely-high-levels-of-pm25/
         stats['epa_iaqi_25'] = None
     return stats
 
@@ -133,8 +134,8 @@ def main() -> None:
     data = r.json()
 
     readings = []
-    for record in data['data']:
-        parsed = parse_record(ALL_FIELDS, record)
+    for sensor_record in data['data']:
+        parsed = parse_sensor_record(ALL_FIELDS, sensor_record)
 
         for plain_key in ['api_version', 'location_type', 'max_age', 'firmware_default_version']:
             parsed[plain_key] = data[plain_key]
