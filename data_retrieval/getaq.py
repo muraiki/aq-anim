@@ -134,7 +134,7 @@ def main() -> None:
 
         readings.append(parsed)
 
-    print('\n'.join([json.dumps(record) for record in readings]))
+    print('\n'.join([json.dumps(reading) for reading in readings]))
 
 
 if __name__ == '__main__':
