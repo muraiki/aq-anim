@@ -1,12 +1,24 @@
 import argparse
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Tuple, Dict
+import json
+
 import requests
+import aqi
 
 API_URL = 'https://api.purpleair.com/v1/sensors'
+
+FIELDS = ('name', 'private', 'last_seen', 'latitude', 'longitude', 'position_rating', 'pm1.0', 'pm2.5', 'pm10.0')
+ALL_FIELDS = tuple(['id'] + list(FIELDS))
+# Record tuple will be one longer than FIELDS, since an integer id is always included first.
+Record = Tuple[int, int, str, int, int, float, float, int, float, float, float]
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Fetch PurpleAir API data for a bounded region and output the result to STDOUT.',
+        description='Fetch PurpleAir API data for a bounded region and output the result to STDOUT as line-delimited '
+                    'JSON.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
@@ -62,6 +74,24 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def parse_record(fields: Tuple[str], record: Record) -> Dict:
+    assert len(fields) == len(record)
+    stats = {k: v for k, v in zip(fields, record)}
+    if stats['pm2.5'] <= 500:
+        stats['epa_iaqi'] = aqi.to_iaqi(aqi.POLLUTANT_PM25, str(stats['pm2.5']), algo=aqi.ALGO_EPA)
+        assert isinstance(stats['epa_iaqi'], Decimal)
+        stats['epa_iaqi'] = int(stats['epa_iaqi'])
+    else:
+        # EPA AQI is undefined for pm2.5 > 500.
+        # https://www.airnow.gov/aqi/aqi-basics/extremely-high-levels-of-pm25/
+        stats['epi_iaqi'] = None
+    return stats
+
+
+def iso_date(d: float) -> str:
+    return datetime.fromtimestamp(d, tz=timezone.utc).isoformat()
+
+
 def main() -> None:
     args = parse_args()
 
@@ -73,8 +103,8 @@ def main() -> None:
 
     headers = {'X-API-Key': apikey}
 
-    data = {
-        'fields': 'name,private,last_seen,latitude,longitude,position_rating,pm1.0,pm2.5,pm10.0',
+    params = {
+        'fields': ','.join(FIELDS),
         'location_type': 0,  # Outside
         'max_age': args.maxage,
         'nwlat': args.nwlat,
@@ -85,11 +115,26 @@ def main() -> None:
 
     r = requests.get(
         API_URL,
-        params=data,
+        params=params,
         headers=headers
     )
 
-    print(r.text)
+    data = r.json()
+
+    readings = []
+    for record in data['data']:
+        parsed = parse_record(ALL_FIELDS, record)
+
+        for plain_key in ['api_version', 'location_type', 'max_age', 'firmware_default_version']:
+            parsed[plain_key] = data[plain_key]
+
+        parsed['time_stamp'] = iso_date(data['time_stamp'])
+        parsed['data_time_stamp'] = iso_date(data['data_time_stamp'])
+        parsed['last_seen'] = iso_date(parsed['last_seen'])
+
+        readings.append(parsed)
+
+    print('\n'.join([json.dumps(record) for record in readings]))
 
 
 if __name__ == '__main__':
