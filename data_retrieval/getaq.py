@@ -1,18 +1,20 @@
 import argparse
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Tuple, Dict
+from typing import Tuple, Dict, cast
 import json
 
 import requests
-import aqi
+import aqi  # type: ignore
 
 API_URL = 'https://api.purpleair.com/v1/sensors'
 
+AllFieldsType = Tuple[str, str, str, str, str, str, str, str, str, str]
+# Record type is one longer than AllFieldsType, since an integer id is included first.
+RecordType = Tuple[int, int, str, int, int, float, float, int, float, float, float]
+
 FIELDS = ('name', 'private', 'last_seen', 'latitude', 'longitude', 'position_rating', 'pm1.0', 'pm2.5', 'pm10.0')
-ALL_FIELDS = tuple(['id'] + list(FIELDS))
-# Record tuple will be one longer than FIELDS, since an integer id is always included first.
-Record = Tuple[int, int, str, int, int, float, float, int, float, float, float]
+ALL_FIELDS = cast(AllFieldsType, (['id'] + list(FIELDS)))
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,7 +76,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_sensor_record(fields: Tuple[str], record: Record) -> Dict:
+def parse_sensor_record(fields: AllFieldsType, record: RecordType) -> Dict:
     """
     Takes a sensor's record from the PurpleAir API, calculates the EPA IAQI for PM 2.5, and returns a dictionary.
     Note that a PM 2.5 > 500 does not have a defined AQI by the EPA. In this case, epa_iaqi_25 will be None.
@@ -85,6 +87,8 @@ def parse_sensor_record(fields: Tuple[str], record: Record) -> Dict:
     """
     assert len(fields) == len(record)
     stats = {k: v for k, v in zip(fields, record)}
+
+    assert isinstance(stats['pm2.5'], int)
     if stats['pm2.5'] <= 500:
         stats['epa_iaqi_25'] = aqi.to_iaqi(aqi.POLLUTANT_PM25, str(stats['pm2.5']), algo=aqi.ALGO_EPA)
         assert isinstance(stats['epa_iaqi_25'], Decimal)
