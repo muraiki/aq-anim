@@ -88,7 +88,7 @@ def parse_sensor_record(fields: AllFieldsType, record: RecordType) -> Dict:
     assert len(fields) == len(record)
     stats = {k: v for k, v in zip(fields, record)}
 
-    assert isinstance(stats['pm2.5'], int)
+    assert isinstance(stats['pm2.5'], float)
     if stats['pm2.5'] <= 500:
         stats['epa_iaqi_25'] = aqi.to_iaqi(aqi.POLLUTANT_PM25, str(stats['pm2.5']), algo=aqi.ALGO_EPA)
         assert isinstance(stats['epa_iaqi_25'], Decimal)
